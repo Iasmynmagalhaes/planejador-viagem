@@ -3,26 +3,10 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { 
-  Calendar, Info, Plane, Car, Ticket, Utensils, Hotel, Plus, Trash2, MapPin, ChevronDown, Clock
+  Calendar, Info, Plane, Car, Ticket, Utensils, Hotel, MapPin, Clock, ChevronDown
 } from 'lucide-react';
-/** @type {import('tailwindcss').Config} */
-module.exports = {
-  content: [
-    "./src/**/*.{js,jsx,ts,tsx}",
-  ],
-  theme: {
-    extend: {
-      colors: {
-        'brand-orange': '#e67e22',
-      }
-    },
-  },
-  plugins: [],
-}
 
-
-
-// Substitua pelo seu objeto de configuração do Firebase Console
+// --- CONFIGURAÇÃO FIREBASE ATUALIZADA ---
 const firebaseConfig = {
   apiKey: "AIzaSyADvST-opktyb3zkiwkz2ECSRDFvL2lnUk",
   authDomain: "planejador-viagem-ad658.firebaseapp.com",
@@ -42,16 +26,14 @@ const App = () => {
   const [activeTab, setActiveTab] = useState('GERAL');
   const [user, setUser] = useState(null);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  // Estados iniciais baseados no planejamento de maio de 2026
+  // Estados com dados de Maio de 2026
   const [essentials, setEssentials] = useState({
     acomodacao: { 
-      local: 'Airbnb', 
-      endereco: 'Rua São Pedro, 1141', 
-      checkin: '2026-05-12', 
-      checkinHora: '14:00',
-      checkout: '2026-05-16', 
-      checkoutHora: '11:00',
+      local: 'Airbnb', endereco: 'Rua São Pedro, 1141', 
+      checkin: '2026-05-12', checkinHora: '14:00',
+      checkout: '2026-05-16', checkoutHora: '11:00',
       status: 'PENDENTE' 
     },
     partida: { data: '', hora: '', voo: '' },
@@ -60,14 +42,10 @@ const App = () => {
   });
 
   const [tripData, setTripData] = useState({
-    VOOS: [],
-    TRANSPORTE: [],
-    ESTADIA: [],
-    PASSEIOS: [],
-    GASTRONOMIA: []
+    VOOS: [], TRANSPORTE: [], ESTADIA: [], PASSEIOS: [], GASTRONOMIA: []
   });
 
-  // Auth & Sync
+  // Auth & Sync com Firestore
   useEffect(() => {
     signInAnonymously(auth).catch(e => console.error("Erro auth:", e));
     const unsubscribe = onAuthStateChanged(auth, (u) => setUser(u));
@@ -84,158 +62,189 @@ const App = () => {
         if (d.tripData) setTripData(d.tripData);
       }
       setDataLoaded(true);
-    }, (err) => console.error("Erro sync:", err));
+    });
     return () => unsubscribe();
   }, [user]);
 
   useEffect(() => {
     if (!user || !dataLoaded) return;
     const saveData = async () => {
+      setSaving(true);
       const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'travelData', 'main');
       await setDoc(docRef, { essentials, tripData }, { merge: true });
+      setTimeout(() => setSaving(false), 800);
     };
     const timeout = setTimeout(saveData, 1000);
     return () => clearTimeout(timeout);
   }, [essentials, tripData, user, dataLoaded]);
 
-  // Cálculos de investimento para o casal
   const totals = useMemo(() => {
     const res = {};
     Object.keys(tripData).forEach(cat => {
-      res[cat] = tripData[cat].reduce((sum, item) => {
-        let val = 0;
-        if (item.base === 'PESSOA') {
-          val = (Number(item.valorPessoa1) || 0) + (Number(item.valorPessoa2) || 0);
-        } else {
-          val = Number(item.valor) || 0;
-        }
-        return sum + val;
-      }, 0);
+      res[cat] = tripData[cat].reduce((sum, item) => sum + (Number(item.valor) || 0), 0);
     });
     res.totalGeral = Object.values(res).reduce((a, b) => a + b, 0);
     return res;
   }, [tripData]);
 
-  const addItem = (cat) => {
-    const newItem = { 
-      id: Date.now(), 
-      nome: '', 
-      valor: 0, 
-      valorPessoa1: 0,
-      valorPessoa2: 0,
-      dia: 'DIA 1', 
-      local: 'GRAMADO', 
-      compra: 'DINHEIRO/CARTÃO',
-      base: 'CASAL' 
-    };
-    setTripData(prev => ({ ...prev, [cat]: [...prev[cat], newItem] }));
-  };
-
-  const updateItem = (cat, id, field, val) => {
-    setTripData(prev => ({
-      ...prev,
-      [cat]: prev[cat].map(it => it.id === id ? { ...it, [field]: val } : it)
-    }));
-  };
-
-  const removeItem = (cat, id) => {
-    setTripData(prev => ({ ...prev, [cat]: prev[cat].filter(it => it.id !== id) }));
-  };
-
-  const NavButton = ({ label, icon: Icon }) => (
-    <button 
-      onClick={() => setActiveTab(label)}
-      className={`flex items-center gap-2 px-6 py-2 rounded-full font-bold text-[11px] transition-all border ${
-        activeTab === label 
-        ? 'bg-[#e67e22] text-white border-[#e67e22] shadow-md' 
-        : 'bg-white text-[#bdc3c7] border-stone-100 hover:border-stone-300'
-      }`}
-    >
-      {Icon && <Icon size={14} />}
-      {label}
-    </button>
+  const InputField = ({ label, value, onChange, type = "text", icon: Icon }) => (
+    <div className="mb-4">
+      <label className="text-[9px] font-black text-stone-300 uppercase tracking-widest mb-1 block flex items-center gap-1">
+        {Icon && <Icon size={10} />} {label}
+      </label>
+      <input 
+        type={type}
+        value={value}
+        onChange={onChange}
+        className="w-full bg-[#f4f7f6] p-3 rounded-2xl font-bold text-stone-600 outline-none border-none focus:ring-2 focus:ring-orange-100 transition-all text-sm"
+      />
+    </div>
   );
 
   return (
-    <div className="min-h-screen bg-[#fafafa] text-[#2c3e50] p-6 md:p-10 font-sans">
-      <header className="max-w-6xl mx-auto flex justify-between items-center mb-8">
-        <div className="flex items-center gap-2">
-          <div className="bg-[#e67e22] p-1.5 rounded-lg text-white">
-            <Calendar size={20} fill="currentColor" />
+    <div className="min-h-screen bg-[#fcfcfc] text-[#2c3e50] p-4 md:p-10 font-sans">
+      {/* Header */}
+      <header className="max-w-7xl mx-auto flex justify-between items-center mb-10">
+        <div className="flex items-center gap-3">
+          <div className="bg-[#e67e22] p-2.5 rounded-2xl text-white shadow-xl shadow-orange-100">
+            <Calendar size={24} />
           </div>
-          <h1 className="text-xl font-black tracking-tight text-stone-900">GRAMADO 26</h1>
+          <h1 className="text-2xl font-black tracking-tighter text-stone-800">GRAMADO 26</h1>
         </div>
         <div className="text-right">
-          <p className="text-[9px] font-black text-stone-400 uppercase tracking-tighter">Investimento Casal</p>
-          <p className="text-3xl font-black text-[#e67e22]">R$ {totals.totalGeral.toLocaleString('pt-BR')}</p>
+          <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em]">Investimento Casal</p>
+          <p className="text-4xl font-black text-[#e67e22]">R$ {totals.totalGeral}</p>
         </div>
       </header>
 
-      <nav className="max-w-6xl mx-auto flex flex-wrap gap-3 mb-12">
-        <NavButton label="GERAL" icon={Info} />
-        <NavButton label="ROTEIRO" icon={MapPin} />
-        <NavButton label="VOOS" icon={Plane} />
-        <NavButton label="TRANSPORTE" icon={Car} />
-        <NavButton label="ESTADIA" icon={Hotel} />
-        <NavButton label="PASSEIOS" icon={Ticket} />
-        <NavButton label="GASTRONOMIA" icon={Utensils} />
+      {/* Nav Tabs */}
+      <nav className="max-w-7xl mx-auto flex flex-wrap gap-2 mb-12">
+        {[
+          {id: 'GERAL', icon: Info}, {id: 'ROTEIRO', icon: MapPin}, {id: 'VOOS', icon: Plane}, 
+          {id: 'TRANSPORTE', icon: Car}, {id: 'ESTADIA', icon: Hotel}, 
+          {id: 'PASSEIOS', icon: Ticket}, {id: 'GASTRONOMIA', icon: Utensils}
+        ].map((tab) => (
+          <button 
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-6 py-3 rounded-full font-black text-[10px] tracking-widest transition-all border ${
+              activeTab === tab.id 
+              ? 'bg-[#e67e22] text-white border-[#e67e22] shadow-lg shadow-orange-100' 
+              : 'bg-white text-[#bdc3c7] border-stone-100 hover:border-stone-200'
+            }`}
+          >
+            <tab.icon size={12} />
+            {tab.id}
+          </button>
+        ))}
       </nav>
 
-      <div className="max-w-6xl mx-auto">
+      <main className="max-w-7xl mx-auto">
         {activeTab === 'GERAL' && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-stone-50">
-              <h3 className="text-[#e67e22] font-black text-[10px] uppercase mb-6 flex items-center gap-2">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            {/* Acomodação */}
+            <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-stone-50">
+              <h3 className="text-[#e67e22] font-black text-[10px] uppercase tracking-[0.2em] mb-8 flex items-center gap-2">
                 <Hotel size={14} /> Acomodação
               </h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-[9px] font-bold text-stone-300 uppercase block mb-1">Local</label>
-                  <input className="w-full bg-[#f8f9fa] p-3 rounded-xl font-bold text-stone-700 outline-none" value={essentials.acomodacao.local} onChange={e => setEssentials({...essentials, acomodacao: {...essentials.acomodacao, local: e.target.value}})} />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[9px] font-bold text-stone-300 uppercase block mb-1 flex items-center gap-1"><Calendar size={8}/> Check-in</label>
-                    <input type="date" className="w-full bg-[#f8f9fa] p-3 rounded-xl font-bold text-[10px] outline-none" value={essentials.acomodacao.checkin} onChange={e => setEssentials({...essentials, acomodacao: {...essentials.acomodacao, checkin: e.target.value}})} />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold text-stone-300 uppercase block mb-1 flex items-center gap-1"><Clock size={8}/> Horário</label>
-                    <input type="time" className="w-full bg-[#f8f9fa] p-3 rounded-xl font-bold text-[10px] outline-none" value={essentials.acomodacao.checkinHora} onChange={e => setEssentials({...essentials, acomodacao: {...essentials.acomodacao, checkinHora: e.target.value}})} />
-                  </div>
-                </div>
+              <InputField label="Local / Hotel" value={essentials.acomodacao.local} onChange={e => setEssentials({...essentials, acomodacao: {...essentials.acomodacao, local: e.target.value}})} />
+              <InputField label="Endereço" value={essentials.acomodacao.endereco} onChange={e => setEssentials({...essentials, acomodacao: {...essentials.acomodacao, endereco: e.target.value}})} />
+              
+              <div className="grid grid-cols-2 gap-4">
+                <InputField label="Check-in" type="date" value={essentials.acomodacao.checkin} onChange={e => setEssentials({...essentials, acomodacao: {...essentials.acomodacao, checkin: e.target.value}})} />
+                <InputField label="Horário" type="time" value={essentials.acomodacao.checkinHora} onChange={e => setEssentials({...essentials, acomodacao: {...essentials.acomodacao, checkinHora: e.target.value}})} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <InputField label="Check-out" type="date" value={essentials.acomodacao.checkout} onChange={e => setEssentials({...essentials, acomodacao: {...essentials.acomodacao, checkout: e.target.value}})} />
+                <InputField label="Horário" type="time" value={essentials.acomodacao.checkoutHora} onChange={e => setEssentials({...essentials, acomodacao: {...essentials.acomodacao, checkoutHora: e.target.value}})} />
+              </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[9px] font-bold text-stone-300 uppercase block mb-1 flex items-center gap-1"><Calendar size={8}/> Check-out</label>
-                    <input type="date" className="w-full bg-[#f8f9fa] p-3 rounded-xl font-bold text-[10px] outline-none" value={essentials.acomodacao.checkout} onChange={e => setEssentials({...essentials, acomodacao: {...essentials.acomodacao, checkout: e.target.value}})} />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold text-stone-300 uppercase block mb-1 flex items-center gap-1"><Clock size={8}/> Horário</label>
-                    <input type="time" className="w-full bg-[#f8f9fa] p-3 rounded-xl font-bold text-[10px] outline-none" value={essentials.acomodacao.checkoutHora} onChange={e => setEssentials({...essentials, acomodacao: {...essentials.acomodacao, checkoutHora: e.target.value}})} />
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                   <label className="text-[9px] font-bold text-stone-300 uppercase block mb-1">Status</label>
-                   <select className="w-full bg-[#fff9e6] p-3 rounded-xl text-[#e67e22] font-black text-[10px] text-center border border-[#feebc8] outline-none" value={essentials.acomodacao.status} onChange={e => setEssentials({...essentials, acomodacao: {...essentials.acomodacao, status: e.target.value}})}>
-                     <option value="PENDENTE">PENDENTE</option>
-                     <option value="CONFIRMADO">CONFIRMADO</option>
-                     <option value="PAGO">PAGO</option>
-                   </select>
+              <div className="mt-4">
+                <label className="text-[9px] font-black text-stone-300 uppercase mb-1 block">Status Reserva</label>
+                <div className="relative">
+                  <select 
+                    className="w-full bg-[#fff9f2] p-4 rounded-2xl text-[#e67e22] font-black text-xs appearance-none border border-[#fef3e7] outline-none"
+                    value={essentials.acomodacao.status}
+                    onChange={e => setEssentials({...essentials, acomodacao: {...essentials.acomodacao, status: e.target.value}})}
+                  >
+                    <option value="PENDENTE">PENDENTE</option>
+                    <option value="RESERVADO">RESERVADO</option>
+                    <option value="PAGO">PAGO</option>
+                  </select>
+                  <ChevronDown className="absolute right-4 top-4 text-[#e67e22]" size={16} />
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-stone-50 md:col-span-2">
-              <h3 className="text-[#e67e22] font-black text-[10px] uppercase mb-4 flex items-center gap-2"><Info size={14} /> Notas da Viagem</h3>
-              <textarea className="w-full h-48 bg-[#f8f9fa] rounded-2xl p-6 border-none text-stone-500 font-medium text-sm outline-none resize-none" value={essentials.notas} onChange={e => setEssentials({...essentials, notas: e.target.value})} placeholder="Dicas, orçamentos e lembretes..." />
+            {/* Partida */}
+            <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-stone-50">
+              <h3 className="text-[#3498db] font-black text-[10px] uppercase tracking-[0.2em] mb-8 flex items-center gap-2">
+                <Plane size={14} className="rotate-45" /> Partida
+              </h3>
+              <div className="grid grid-cols-2 gap-4">
+                <InputField label="Data" type="date" value={essentials.partida.data} onChange={e => setEssentials({...essentials, partida: {...essentials.partida, data: e.target.value}})} />
+                <InputField label="Hora" type="time" value={essentials.partida.hora} onChange={e => setEssentials({...essentials, partida: {...essentials.partida, hora: e.target.value}})} />
+              </div>
+              <InputField label="Aeroporto / Voo" value={essentials.partida.voo} onChange={e => setEssentials({...essentials, partida: {...essentials.partida, voo: e.target.value}})} />
+            </div>
+
+            {/* Retorno */}
+            <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-stone-50">
+              <h3 className="text-[#2ecc71] font-black text-[10px] uppercase tracking-[0.2em] mb-8 flex items-center gap-2">
+                <Plane size={14} className="-rotate-135" /> Retorno
+              </h3>
+              <div className="grid grid-cols-2 gap-4">
+                <InputField label="Data" type="date" value={essentials.retorno.data} onChange={e => setEssentials({...essentials, retorno: {...essentials.retorno, data: e.target.value}})} />
+                <InputField label="Hora" type="time" value={essentials.retorno.hora} onChange={e => setEssentials({...essentials, retorno: {...essentials.retorno, hora: e.target.value}})} />
+              </div>
+              <InputField label="Aeroporto / Voo" value={essentials.retorno.voo} onChange={e => setEssentials({...essentials, retorno: {...essentials.retorno, voo: e.target.value}})} />
+            </div>
+
+            {/* Card de Investimentos (Preto) */}
+            <div className="bg-[#1a1a1a] rounded-[2.5rem] p-10 shadow-2xl shadow-black/20 text-white lg:col-span-1">
+              <h3 className="text-orange-500 font-black text-[9px] uppercase tracking-[0.3em] mb-10 flex items-center gap-2">
+                <Info size={14} /> Investimento Total
+              </h3>
+              <div className="space-y-6">
+                {Object.keys(tripData).map(cat => (
+                  <div key={cat} className="flex justify-between items-center border-b border-white/5 pb-2">
+                    <span className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">{cat}</span>
+                    <span className="font-black text-sm">R$ {totals[cat]}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-12 pt-6 border-t border-white/10">
+                <p className="text-[9px] font-black text-stone-500 uppercase mb-1">Total Geral Casal</p>
+                <p className="text-4xl font-black text-white">R$ {totals.totalGeral}</p>
+              </div>
+            </div>
+
+            {/* Notas */}
+            <div className="lg:col-span-2 bg-white rounded-[2.5rem] p-8 shadow-sm border border-stone-50">
+              <h3 className="text-orange-500 font-black text-[10px] uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+                <Info size={16} /> Notas Importantes
+              </h3>
+              <textarea 
+                className="w-full h-64 bg-[#f8f9fa] rounded-3xl p-8 border-none text-stone-600 font-medium text-sm outline-none resize-none focus:ring-2 focus:ring-orange-50 transition-all"
+                value={essentials.notas}
+                onChange={e => setEssentials({...essentials, notas: e.target.value})}
+                placeholder="Detalhes sobre ingressos, restaurantes Prime Gourmet..."
+              />
             </div>
           </div>
         )}
+      </main>
 
-        {/* Adicione aqui os blocos das outras abas conforme necessário */}
-      </div>
+      {/* Status de Sincronização */}
+      <footer className="fixed bottom-6 right-6">
+        <div className="bg-white/80 backdrop-blur-md px-6 py-3 rounded-full shadow-lg border border-stone-100 flex items-center gap-3">
+          <div className={`w-2 h-2 rounded-full ${saving ? 'bg-orange-500 animate-pulse' : 'bg-green-500'}`} />
+          <span className="text-[9px] font-black text-stone-400 uppercase tracking-widest">
+            {saving ? 'Sincronizando...' : 'Nuvem Conectada'}
+          </span>
+        </div>
+      </footer>
     </div>
   );
 };
