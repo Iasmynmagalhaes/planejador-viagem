@@ -40,7 +40,7 @@ const App = () => {
   });
 
   const [tripData, setTripData] = useState({
-    VOOS: [], TRANSPORTE: [], ESTADIA: [], PASSEIOS: [], GASTRONOMIA: []
+    VOOS: [], 
   });
 
   useEffect(() => {
